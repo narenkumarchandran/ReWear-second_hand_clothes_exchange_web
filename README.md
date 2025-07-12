@@ -4,6 +4,8 @@
 # Team Leader Mail ID: aerosibin777@gmail.com
 # 👕 ReWear Frontend – AI-Enhanced Clothing Exchange Platform
 
+# Project Demo
+[Demo Video]([https://github.com/plan28-06](https://drive.google.com/file/d/11g7IUN1PeLruDyPTy4nKnOIlG6SlIYZy/view?usp=drive_link))
 Welcome to the **frontend** of ReWear – a smart, sustainable platform where users can **buy, sell, and explore second-hand clothes** using cutting-edge **AI assistance**. This interface is built to provide a seamless and intelligent experience powered by visual understanding and personalized recommendations.
 
 ---
