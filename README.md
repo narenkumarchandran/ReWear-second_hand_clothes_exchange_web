@@ -20,7 +20,7 @@ Welcome to the **frontend** of ReWear – a smart, sustainable platform where us
 - **ShadCN UI** – beautiful, accessible components
 - **Lucide React** – modern icon set
 - **Gemini Pro (Google Generative AI)** – for chatbot and visual tasks
-- **DeepAI NSFW API** – for content moderation
+- **Sightengine NSFW API** – for content moderation
 - **REST API integration** – connects to an Odoo 25 backend
 
 ---
@@ -47,7 +47,7 @@ Welcome to the **frontend** of ReWear – a smart, sustainable platform where us
 
 ---
 
-### 🧼 3. NSFW & Content Moderation (DeepAI API)
+### 🧼 3. NSFW & Content Moderation (Sightengine API)
 - Every image upload is passed through a **moderation pipeline**.
 - The image is checked for:
   - Nudity
