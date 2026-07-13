@@ -14,15 +14,15 @@ import {
   CheckCircle,
   AlertCircle,
   Ruler,
-  Check,
-  MapPin
+  MapPin,
+  Package
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import Header from '@/components/Header';
 import { aiDescriptionService } from '@/services/aiDescriptionService';
-import Chatbot from '@/components/Chatbot';
+import { itemsApi } from '@/services/api';
 
 const ListItem = () => {
   const [images, setImages] = useState<File[]>([]);
@@ -44,7 +44,6 @@ const ListItem = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { toast } = useToast();
 
   const categories = ['Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Footwear', 'Accessories'];
   const conditions = ['New', 'Like New', 'Good', 'Fair'];
@@ -54,60 +53,33 @@ const ListItem = () => {
     setImageVerificationStatus(prev => ({ ...prev, [index]: 'pending' }));
     
     try {
-      // Simulate the DeepAI moderation process
-      const formData = new FormData();
-      formData.append('image', file);
+      const moderationResult = await aiDescriptionService.moderateImage(file);
       
-      // Mock API call to simulate image moderation
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Simulate moderation result
-      const mockModerationResult = {
-        ok: true,
-        nsfw_score: Math.random() * 0.3, // Random score below 0.5 (safe threshold)
-        message: "Image is safe to use"
-      };
-      
-      if (mockModerationResult.ok && mockModerationResult.nsfw_score < 0.5) {
+      if (moderationResult.isAppropriate) {
         setImageVerificationStatus(prev => ({ ...prev, [index]: 'verified' }));
-        toast({
-          title: "Image Verified ✓",
-          description: `Image passed safety checks (Score: ${mockModerationResult.nsfw_score.toFixed(2)})`,
-        });
+        toast.success(`Image passed safety checks (Score: ${moderationResult.nsfwScore.toFixed(2)})`);
       } else {
         setImageVerificationStatus(prev => ({ ...prev, [index]: 'rejected' }));
-        toast({
-          title: "Image Rejected",
-          description: "Image contains inappropriate content",
-          variant: "destructive"
-        });
+        toast.error(moderationResult.message || "Image contains inappropriate content");
       }
     } catch (error) {
       console.error('Image verification error:', error);
+      // Fail open
       setImageVerificationStatus(prev => ({ ...prev, [index]: 'verified' }));
-      toast({
-        title: "Verification unavailable",
-        description: "Unable to verify image, but you can proceed.",
-        variant: "destructive"
-      });
+      toast.info("Unable to verify image right now, but you can proceed.");
     }
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (images.length + files.length > 5) {
-      toast({
-        title: "Too many images",
-        description: "You can upload maximum 5 images",
-        variant: "destructive"
-      });
+      toast.error("You can upload maximum 5 images");
       return;
     }
     
     const newImages = [...images, ...files];
     setImages(newImages);
     
-    // Verify each new image
     for (let i = 0; i < files.length; i++) {
       const imageIndex = images.length + i;
       await verifyImage(files[i], imageIndex);
@@ -125,31 +97,21 @@ const ListItem = () => {
 
   const handleAutoGenerate = async () => {
     if (images.length === 0) {
-      toast({
-        title: "No image selected",
-        description: "Please upload at least one image to generate description",
-        variant: "destructive"
-      });
+      toast.error("Please upload at least one image to generate description");
       return;
     }
 
     setIsGenerating(true);
     
     try {
-      // Check image appropriateness
       const moderationResult = await aiDescriptionService.moderateImage(images[0]);
       
       if (!moderationResult.isAppropriate) {
-        toast({
-          title: "Image not appropriate",
-          description: moderationResult.message,
-          variant: "destructive"
-        });
+        toast.error(moderationResult.message);
         setIsGenerating(false);
         return;
       }
 
-      // Generate description
       const result = await aiDescriptionService.generateClothingDescription(images[0]);
       
       if (result) {
@@ -163,7 +125,6 @@ const ListItem = () => {
         setBrand(result.brand || '');
         setTags(result.tags || []);
         
-        // Convert price to eco points (1 dollar = 10 eco points)
         if (result.estimatedPrice) {
           const priceMatch = result.estimatedPrice.match(/\$(\d+)/);
           if (priceMatch) {
@@ -172,18 +133,11 @@ const ListItem = () => {
           }
         }
 
-        toast({
-          title: "Description Generated!",
-          description: "AI has automatically filled in the item details. You can edit them as needed.",
-        });
+        toast.success("AI has automatically filled in the item details.");
       }
     } catch (error) {
       console.error('Auto-generation error:', error);
-      toast({
-        title: "Generation failed",
-        description: "Unable to generate description. Please fill in manually.",
-        variant: "destructive"
-      });
+      toast.error("Unable to generate description. Please fill in manually.");
     }
     
     setIsGenerating(false);
@@ -191,11 +145,7 @@ const ListItem = () => {
 
   const handleSizePrediction = async () => {
     if (images.length === 0) {
-      toast({
-        title: "No image selected",
-        description: "Please upload at least one image for size prediction",
-        variant: "destructive"
-      });
+      toast.error("Please upload at least one image for size prediction");
       return;
     }
 
@@ -206,19 +156,11 @@ const ListItem = () => {
       
       if (result && result.predictedSize) {
         setSize(result.predictedSize);
-        
-        toast({
-          title: "Size Predicted!",
-          description: `Predicted size: ${result.predictedSize}. ${result.confidence ? `Confidence: ${result.confidence}` : ''}`,
-        });
+        toast.success(`Predicted size: ${result.predictedSize}. ${result.confidence ? `Confidence: ${result.confidence}` : ''}`);
       }
     } catch (error) {
       console.error('Size prediction error:', error);
-      toast({
-        title: "Prediction failed",
-        description: "Unable to predict size. Please select manually.",
-        variant: "destructive"
-      });
+      toast.error("Unable to predict size. Please select manually.");
     }
     
     setIsPredictingSize(false);
@@ -239,34 +181,35 @@ const ListItem = () => {
     e.preventDefault();
     
     if (!title || !description || !ecoPoints || !category || !condition || images.length === 0) {
-      toast({
-        title: "Missing information",
-        description: "Please fill in all required fields and upload at least one image",
-        variant: "destructive"
-      });
+      toast.error("Please fill in all required fields and upload at least one image");
       return;
     }
 
-    // Check if all images are verified
     const hasUnverifiedImages = images.some((_, index) => 
       imageVerificationStatus[index] === 'pending' || imageVerificationStatus[index] === 'rejected'
     );
     
     if (hasUnverifiedImages) {
-      toast({
-        title: "Images need verification",
-        description: "Please wait for all images to be verified before submitting",
-        variant: "destructive"
-      });
+      toast.error("Please wait for all images to be verified before submitting");
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      // Create item object with "on-processing" status
-      const newItem = {
-        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      const imageBase64s = await Promise.all(
+        images.map(
+          (file) =>
+            new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = () => reject(new Error('Failed to read image'));
+              reader.readAsDataURL(file);
+            })
+        )
+      );
+
+      await itemsApi.create({
         title,
         description,
         price: parseInt(ecoPoints),
@@ -278,60 +221,14 @@ const ListItem = () => {
         brand,
         location: location || 'Not specified',
         tags,
-        images: images.map((file, index) => URL.createObjectURL(file)),
-        seller: {
-          name: user?.email?.split('@')[0] || 'Anonymous',
-          email: user?.email || '',
-          avatar: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxjaXJjbGUgY3g9IjUwIiBjeT0iNTAiIHI9IjUwIiBmaWxsPSIjZjNmNGY2Ii8+CjxjaXJjbGUgY3g9IjUwIiBjeT0iMzUiIHI9IjE1IiBmaWxsPSIjOWNhM2FmIi8+CjxwYXRoIGQ9Ik0yMCA4NWMwLTE2LjU2OSAxMy40MzEtMzAgMzAtMzBzMzAgMTMuNDMxIDMwIDMwSDIweiIgZmlsbD0iIzljYTNhZiIvPgo8L3N2Zz4K'
-        },
-        createdAt: new Date().toISOString(),
-        submittedDate: new Date().toISOString(),
-        status: 'on-processing',
-        upvotes: 0,
-        upvotedBy: [],
-        views: 0
-      };
-
-      // Save to pending items for admin approval
-      const existingPendingItems = JSON.parse(localStorage.getItem('pendingItems') || '[]');
-      existingPendingItems.push(newItem);
-      localStorage.setItem('pendingItems', JSON.stringify(existingPendingItems));
-
-      // Also save to user's items
-      const existingUserItems = JSON.parse(localStorage.getItem('userItems') || '[]');
-      existingUserItems.push(newItem);
-      localStorage.setItem('userItems', JSON.stringify(existingUserItems));
-
-      toast({
-        title: "Item submitted successfully!",
-        description: "Your item is now on-processing and awaiting admin approval.",
+        images: imageBase64s,
       });
 
-      // Reset form
-      setImages([]);
-      setImageVerificationStatus({});
-      setTitle('');
-      setDescription('');
-      setEcoPoints('');
-      setCategory('');
-      setType('');
-      setSize('');
-      setCondition('');
-      setColor('');
-      setBrand('');
-      setLocation('');
-      setTags([]);
-      setNewTag('');
-
-      // Navigate to my items page
-      navigate('/my-items');
+      toast.success("Your item is now on-processing and awaiting admin approval.");
+      navigate('/profile');
     } catch (error) {
       console.error('Submission error:', error);
-      toast({
-        title: "Submission failed",
-        description: "There was an error submitting your item. Please try again.",
-        variant: "destructive"
-      });
+      toast.error("There was an error submitting your item. Please try again.");
     }
 
     setIsSubmitting(false);
@@ -341,323 +238,301 @@ const ListItem = () => {
     const status = imageVerificationStatus[index];
     switch (status) {
       case 'pending':
-        return <Loader2 className="h-4 w-4 animate-spin text-yellow-500" />;
+        return <Loader2 className="h-4 w-4 animate-spin text-amber-500" />;
       case 'verified':
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
+        return <CheckCircle className="h-4 w-4 text-emerald-500" />;
       case 'rejected':
-        return <AlertCircle className="h-4 w-4 text-red-500" />;
+        return <AlertCircle className="h-4 w-4 text-destructive" />;
       default:
         return null;
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
+    <div className="min-h-screen bg-background flex flex-col">
       <Header />
       
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <Card className="bg-card/80 backdrop-blur-sm border-border shadow-xl">
-          <CardHeader>
-            <CardTitle className="text-2xl text-card-foreground">List Your Item</CardTitle>
-            <p className="text-muted-foreground">
-              Upload photos and details of your clothing item. Our AI can help auto-generate descriptions and predict sizes!
-            </p>
-          </CardHeader>
-          
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Image Upload Section */}
-              <div className="space-y-4">
-                <Label className="text-sm font-medium text-foreground">Photos (Required)</Label>
+      <div className="flex-1 max-w-4xl w-full mx-auto p-4 md:py-8">
+        <div className="mb-8 flex items-center gap-3">
+          <div className="bg-primary/10 p-2.5 rounded-lg text-primary">
+            <Package className="h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">List a New Item</h1>
+            <p className="text-muted-foreground">Upload photos and let our AI generate the details for you.</p>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-8">
+          <Card className="bg-card border-border overflow-hidden">
+            <div className="bg-muted/50 p-6 border-b border-border">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <Camera className="h-5 w-5 text-primary" />
+                Photos
+              </h2>
+            </div>
+            
+            <CardContent className="p-6">
+              <div className="border-2 border-dashed border-border rounded-xl p-8 bg-background hover:bg-muted/30 transition-colors">
+                <input
+                  type="file"
+                  id="images"
+                  multiple
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
                 
-                <div className="border-2 border-dashed border-border rounded-lg p-6 bg-muted/20">
-                  <input
-                    type="file"
-                    id="images"
-                    multiple
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    className="hidden"
-                  />
-                  
-                  {images.length === 0 ? (
-                    <label htmlFor="images" className="cursor-pointer flex flex-col items-center">
-                      <Camera className="h-12 w-12 text-muted-foreground mb-4" />
-                      <p className="text-muted-foreground text-center">
-                        Click to upload photos or drag and drop<br />
-                        <span className="text-sm">PNG, JPG up to 10MB (max 5 photos)</span>
-                      </p>
-                    </label>
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                        {images.map((image, index) => (
-                          <div key={index} className="relative">
-                            <img
-                              src={URL.createObjectURL(image)}
-                              alt={`Upload ${index + 1}`}
-                              className="w-full h-32 object-cover rounded-lg border border-border"
-                            />
+                {images.length === 0 ? (
+                  <label htmlFor="images" className="cursor-pointer flex flex-col items-center justify-center w-full h-full min-h-[160px]">
+                    <div className="bg-muted p-4 rounded-full mb-4">
+                      <Camera className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                    <p className="text-foreground font-medium mb-1">Click to upload photos</p>
+                    <p className="text-muted-foreground text-sm">PNG, JPG up to 10MB (max 5 photos)</p>
+                  </label>
+                ) : (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {images.map((image, index) => (
+                        <div key={index} className="relative aspect-square rounded-xl overflow-hidden border border-border group">
+                          <img
+                            src={URL.createObjectURL(image)}
+                            alt={`Upload ${index + 1}`}
+                            className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                             <Button
                               type="button"
                               variant="destructive"
                               size="sm"
-                              className="absolute -top-2 -right-2 h-6 w-6 rounded-full p-0"
+                              className="h-8 w-8 rounded-full p-0"
                               onClick={() => removeImage(index)}
                             >
-                              <X className="h-3 w-3" />
+                              <X className="h-4 w-4" />
                             </Button>
-                            <div className="absolute -top-2 -left-2 h-6 w-6 rounded-full bg-background border border-border flex items-center justify-center">
-                              {getVerificationIcon(index)}
-                            </div>
                           </div>
-                        ))}
-                        {images.length < 5 && (
-                          <label htmlFor="images" className="cursor-pointer">
-                            <div className="w-full h-32 border-2 border-dashed border-border rounded-lg flex items-center justify-center hover:bg-muted/50 transition-colors">
-                              <Upload className="h-6 w-6 text-muted-foreground" />
-                            </div>
-                          </label>
-                        )}
-                      </div>
-                      
-                      <div className="flex gap-2">
-                        <Button
-                          type="button"
-                          onClick={handleAutoGenerate}
-                          disabled={isGenerating}
-                          className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
-                        >
-                          {isGenerating ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Generating...
-                            </>
-                          ) : (
-                            <>
-                              <Sparkles className="h-4 w-4 mr-2" />
-                              Auto-Generate Description
-                            </>
-                          )}
-                        </Button>
-                        
-                        <Button
-                          type="button"
-                          onClick={handleSizePrediction}
-                          disabled={isPredictingSize}
-                          variant="outline"
-                          className="border-border text-foreground hover:bg-muted"
-                        >
-                          {isPredictingSize ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Predicting...
-                            </>
-                          ) : (
-                            <>
-                              <Ruler className="h-4 w-4 mr-2" />
-                              Predict Size
-                            </>
-                          )}
-                        </Button>
-                      </div>
+                          <div className="absolute top-2 left-2 h-6 w-6 rounded-full bg-background/90 shadow-sm flex items-center justify-center">
+                            {getVerificationIcon(index)}
+                          </div>
+                        </div>
+                      ))}
+                      {images.length < 5 && (
+                        <label htmlFor="images" className="cursor-pointer aspect-square rounded-xl border-2 border-dashed border-border flex items-center justify-center hover:bg-muted/50 transition-colors group">
+                          <div className="flex flex-col items-center text-muted-foreground group-hover:text-foreground transition-colors">
+                            <Upload className="h-6 w-6 mb-2" />
+                            <span className="text-sm font-medium">Add More</span>
+                          </div>
+                        </label>
+                      )}
                     </div>
-                  )}
-                </div>
+                    
+                    <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-border/50">
+                      <Button
+                        type="button"
+                        onClick={handleAutoGenerate}
+                        disabled={isGenerating}
+                        className="flex-1 bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white"
+                      >
+                        {isGenerating ? (
+                          <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Analyzing...</>
+                        ) : (
+                          <><Sparkles className="h-4 w-4 mr-2" /> AI Auto-Fill Details</>
+                        )}
+                      </Button>
+                      
+                      <Button
+                        type="button"
+                        onClick={handleSizePrediction}
+                        disabled={isPredictingSize}
+                        variant="outline"
+                        className="flex-1"
+                      >
+                        {isPredictingSize ? (
+                          <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Predicting...</>
+                        ) : (
+                          <><Ruler className="h-4 w-4 mr-2" /> Predict Size</>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
+            </CardContent>
+          </Card>
 
-              {/* Basic Information */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="title" className="text-foreground">Title *</Label>
+          <Card className="bg-card border-border overflow-hidden">
+            <div className="bg-muted/50 p-6 border-b border-border">
+              <h2 className="text-lg font-semibold">Item Details</h2>
+            </div>
+            
+            <CardContent className="p-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="title">Title <span className="text-destructive">*</span></Label>
                   <Input
                     id="title"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    placeholder="e.g., Vintage Denim Jacket"
+                    placeholder="e.g., Vintage Levi's 501 Original Fit Jeans"
                     required
-                    className="bg-background border-border text-foreground"
+                    className="bg-background"
                   />
                 </div>
                 
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="description">Description <span className="text-destructive">*</span></Label>
+                  <Textarea
+                    id="description"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Describe the condition, material, fit, and any flaws..."
+                    rows={5}
+                    required
+                    className="bg-background resize-none"
+                  />
+                </div>
+
                 <div className="space-y-2">
-                  <Label htmlFor="ecoPoints" className="text-foreground">Eco Points *</Label>
+                  <Label htmlFor="ecoPoints">Price (Points) <span className="text-destructive">*</span></Label>
                   <Input
                     id="ecoPoints"
                     type="number"
+                    min="0"
                     value={ecoPoints}
                     onChange={(e) => setEcoPoints(e.target.value)}
                     placeholder="250"
                     required
-                    className="bg-background border-border text-foreground"
+                    className="bg-background"
                   />
-                  <p className="text-xs text-muted-foreground">Suggested: 10 eco points per $1 value</p>
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="description" className="text-foreground">Description *</Label>
-                <Textarea
-                  id="description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Describe your item's condition, style, and any other relevant details..."
-                  rows={4}
-                  required
-                  className="bg-background border-border text-foreground"
-                />
-              </div>
-
-              {/* Category and Details */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-foreground">Category *</Label>
+                  <Label htmlFor="category">Category <span className="text-destructive">*</span></Label>
                   <select
+                    id="category"
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
                     required
-                    className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <option value="">Select category</option>
-                    {categories.map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
+                    <option value="" disabled>Select category</option>
+                    {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                   </select>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="type" className="text-foreground">Type</Label>
-                  <Input
-                    id="type"
-                    value={type}
-                    onChange={(e) => setType(e.target.value)}
-                    placeholder="e.g., T-shirt, Jeans"
-                    className="bg-background border-border text-foreground"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-foreground">Size</Label>
+                  <Label htmlFor="condition">Condition <span className="text-destructive">*</span></Label>
                   <select
-                    value={size}
-                    onChange={(e) => setSize(e.target.value)}
-                    className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground"
-                  >
-                    <option value="">Select size</option>
-                    {sizes.map(s => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-foreground">Condition *</Label>
-                  <select
+                    id="condition"
                     value={condition}
                     onChange={(e) => setCondition(e.target.value)}
                     required
-                    className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   >
-                    <option value="">Select condition</option>
-                    {conditions.map(cond => (
-                      <option key={cond} value={cond}>{cond}</option>
-                    ))}
+                    <option value="" disabled>Select condition</option>
+                    {conditions.map(cond => <option key={cond} value={cond}>{cond}</option>)}
                   </select>
                 </div>
-              </div>
 
-              {/* Additional Details */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="color" className="text-foreground">Color</Label>
-                  <Input
-                    id="color"
-                    value={color}
-                    onChange={(e) => setColor(e.target.value)}
-                    placeholder="e.g., Blue, Red, Multi-color"
-                    className="bg-background border-border text-foreground"
-                  />
+                  <Label htmlFor="size">Size</Label>
+                  <select
+                    id="size"
+                    value={size}
+                    onChange={(e) => setSize(e.target.value)}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
+                    <option value="">Select size</option>
+                    {sizes.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
                 </div>
-                
+
                 <div className="space-y-2">
-                  <Label htmlFor="brand" className="text-foreground">Brand</Label>
+                  <Label htmlFor="brand">Brand</Label>
                   <Input
                     id="brand"
                     value={brand}
                     onChange={(e) => setBrand(e.target.value)}
-                    placeholder="e.g., Nike, Zara, Uniqlo"
-                    className="bg-background border-border text-foreground"
+                    placeholder="e.g., Nike, Zara"
+                    className="bg-background"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="location" className="text-foreground">Location</Label>
+                  <Label htmlFor="color">Color</Label>
+                  <Input
+                    id="color"
+                    value={color}
+                    onChange={(e) => setColor(e.target.value)}
+                    placeholder="e.g., Navy Blue"
+                    className="bg-background"
+                  />
+                </div>
+
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="location">Location</Label>
                   <div className="relative">
-                    <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       id="location"
                       value={location}
                       onChange={(e) => setLocation(e.target.value)}
-                      placeholder="e.g., New York, NY"
-                      className="pl-10 bg-background border-border text-foreground"
+                      placeholder="City, State"
+                      className="pl-9 bg-background"
                     />
                   </div>
                 </div>
-              </div>
 
-              {/* Tags */}
-              <div className="space-y-2">
-                <Label className="text-foreground">Tags</Label>
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {tags.map((tag, index) => (
-                    <Badge key={index} variant="secondary" className="bg-secondary text-secondary-foreground">
-                      {tag}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="ml-2 h-4 w-4 p-0 hover:bg-transparent"
-                        onClick={() => removeTag(tag)}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </Badge>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <Input
-                    value={newTag}
-                    onChange={(e) => setNewTag(e.target.value)}
-                    placeholder="Add a tag"
-                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
-                    className="bg-background border-border text-foreground"
-                  />
-                  <Button type="button" onClick={addTag} variant="outline" className="border-border text-foreground">
-                    Add
-                  </Button>
+                <div className="space-y-3 md:col-span-2">
+                  <Label>Tags</Label>
+                  <div className="flex flex-wrap gap-2 min-h-[32px]">
+                    {tags.length === 0 && <span className="text-sm text-muted-foreground">No tags added</span>}
+                    {tags.map((tag, index) => (
+                      <Badge key={index} variant="secondary" className="pl-3 pr-1 py-1">
+                        {tag}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-4 w-4 ml-1 hover:bg-transparent"
+                          onClick={() => removeTag(tag)}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </Badge>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      value={newTag}
+                      onChange={(e) => setNewTag(e.target.value)}
+                      placeholder="Add tags (e.g., vintage, y2k)"
+                      onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
+                      className="bg-background"
+                    />
+                    <Button type="button" variant="secondary" onClick={addTag}>Add</Button>
+                  </div>
                 </div>
               </div>
-
+            </CardContent>
+            
+            <div className="p-6 border-t border-border bg-muted/20">
               <Button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
+                className="w-full text-base py-6"
               >
                 {isSubmitting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Submitting...
-                  </>
+                  <><Loader2 className="h-5 w-5 mr-2 animate-spin" /> Submitting for Approval...</>
                 ) : (
-                  'Submit for Approval'
+                  'Submit Listing'
                 )}
               </Button>
-            </form>
-          </CardContent>
-        </Card>
+            </div>
+          </Card>
+        </form>
       </div>
-
-      <Chatbot />
     </div>
   );
 };

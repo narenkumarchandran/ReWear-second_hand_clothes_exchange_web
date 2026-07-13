@@ -1,304 +1,398 @@
 import React, { useState, useEffect } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { useAuth } from '@/contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { usersApi, ApiUser, ApiItem } from '@/services/api';
 import { 
-  LogOut, 
-  Users, 
+  Users as UsersIcon,
   Search,
-  User,
+  MoreVertical,
+  ShieldAlert,
+  CheckCircle,
+  Ban,
   Mail,
   Calendar,
-  Shield,
-  ArrowLeft
+  X,
+  Package,
+  Loader2
 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-
-interface UserData {
-  id: string;
-  name: string;
-  email: string;
-  joinDate: string;
-  isAdmin: boolean;
-  totalListings: number;
-  status: 'active' | 'suspended';
-  avatar?: string;
-}
+import { toast } from 'sonner';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const AdminUsers = () => {
-  const { user, logout, isAdmin } = useAuth();
-  const navigate = useNavigate();
-  const [users, setUsers] = useState<UserData[]>([]);
+  const [users, setUsers] = useState<ApiUser[]>([]);
+  const [filteredUsers, setFilteredUsers] = useState<ApiUser[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'suspended' | 'admin'>('all');
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // User detail sheet state
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [selectedUserDetails, setSelectedUserDetails] = useState<{user: ApiUser, items: ApiItem[], purchases?: any[]} | null>(null);
+  const [isDetailLoading, setIsDetailLoading] = useState(false);
 
-  // Load users from localStorage and generate mock data
   useEffect(() => {
-    const loadUsers = () => {
-      const storedUsers = localStorage.getItem('systemUsers');
-      if (storedUsers) {
-        setUsers(JSON.parse(storedUsers));
-      } else {
-        // Generate some mock users for demonstration
-        const mockUsers: UserData[] = [
-          {
-            id: '1',
-            name: 'John Doe',
-            email: 'john@example.com',
-            joinDate: '2024-01-15',
-            isAdmin: false,
-            totalListings: 5,
-            status: 'active'
-          },
-          {
-            id: '2',
-            name: 'Jane Smith',
-            email: 'jane@example.com',
-            joinDate: '2024-02-20',
-            isAdmin: false,
-            totalListings: 12,
-            status: 'active'
-          },
-          {
-            id: '3',
-            name: 'Admin User',
-            email: 'admin@example.com',
-            joinDate: '2024-01-01',
-            isAdmin: true,
-            totalListings: 0,
-            status: 'active'
-          }
-        ];
-        localStorage.setItem('systemUsers', JSON.stringify(mockUsers));
-        setUsers(mockUsers);
-      }
-    };
-
     loadUsers();
   }, []);
 
-  // Redirect if not admin
+  const loadUsers = async () => {
+    try {
+      const { users: data } = await usersApi.listAll();
+      setUsers(data);
+      setFilteredUsers(data);
+    } catch (error) {
+      console.error('Failed to load users:', error);
+      toast.error('Failed to load users');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    if (!isAdmin()) {
-      navigate('/');
-    }
-  }, [isAdmin, navigate]);
+    const term = searchTerm.toLowerCase();
+    setFilteredUsers(
+      users.filter(u => 
+        u.name?.toLowerCase().includes(term) || 
+        u.email?.toLowerCase().includes(term)
+      )
+    );
+  }, [searchTerm, users]);
 
-  const filteredUsers = users.filter(userData => {
-    const matchesSearch = userData.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         userData.email.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesFilter = filterStatus === 'all' || 
-                         (filterStatus === 'admin' && userData.isAdmin) ||
-                         userData.status === filterStatus;
-    
-    return matchesSearch && matchesFilter;
-  });
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
-      case 'suspended': return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
-      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300';
+  const loadUserDetails = async (id: string) => {
+    setSelectedUserId(id);
+    setIsDetailLoading(true);
+    try {
+      const data = await usersApi.getById(id);
+      setSelectedUserDetails(data);
+    } catch (error) {
+      toast.error('Failed to load user details');
+      setSelectedUserId(null);
+    } finally {
+      setIsDetailLoading(false);
     }
   };
 
-  const getDefaultAvatar = () => {
-    return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxjaXJjbGUgY3g9IjUwIiBjeT0iNTAiIHI9IjUwIiBmaWxsPSIjZjNmNGY2Ii8+CjxjaXJjbGUgY3g9IjUwIiBjeT0iMzUiIHI9IjE1IiBmaWxsPSIjOWNhM2FmIi8+CjxwYXRoIGQ9Ik0yMCA4NWMwLTE2LjU2OSAxMy40MzEtMzAgMzAtMzBzMzAgMTMuNDMxIDMwIDMwSDIweiIgZmlsbD0iIzljYTNhZiIvPgo8L3N2Zz4K';
+  const handleSuspend = async (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    try {
+      await usersApi.suspend(id);
+      toast.success('User suspended successfully');
+      loadUsers();
+      if (selectedUserId === id) loadUserDetails(id);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to suspend user');
+    }
   };
 
-  if (!user || !isAdmin()) {
-    return null;
-  }
+  const handleUnsuspend = async (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    try {
+      await usersApi.unsuspend(id);
+      toast.success('User unsuspended successfully');
+      loadUsers();
+      if (selectedUserId === id) loadUserDetails(id);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to unsuspend user');
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-indigo-950">
-      {/* Decorative Background Elements */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-br from-blue-400/20 to-indigo-600/20 rounded-full blur-3xl"></div>
-        <div className="absolute top-1/2 -left-40 w-80 h-80 bg-gradient-to-br from-indigo-400/20 to-purple-600/20 rounded-full blur-3xl"></div>
-        <div className="absolute -bottom-40 right-1/3 w-80 h-80 bg-gradient-to-br from-blue-400/20 to-teal-600/20 rounded-full blur-3xl"></div>
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight text-foreground">Users Management</h2>
+          <p className="text-muted-foreground">Manage accounts, view activity, and handle suspensions.</p>
+        </div>
       </div>
 
-      {/* Header */}
-      <header className="sticky top-0 z-50 glass-effect border-b border-white/20 dark:border-gray-700/20">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Button
-                variant="ghost"
-                onClick={() => navigate('/admin')}
-                className="text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Dashboard
-              </Button>
-              <div className="bg-gradient-to-r from-blue-500 to-indigo-500 p-2 rounded-full">
-                <Users className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                  User Management
-                </h1>
-                <p className="text-gray-600 dark:text-gray-400">Manage system users and permissions</p>
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-4">
-              <div className="text-right">
-                <p className="font-medium text-gray-800 dark:text-gray-200">{user.name}</p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Administrator</p>
-              </div>
-              <Button
-                variant="outline"
-                onClick={logout}
-                className="border-red-200 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
-              >
-                <LogOut className="h-4 w-4 mr-2" />
-                Logout
-              </Button>
-            </div>
+      <Card className="bg-card border-border">
+        <div className="p-4 border-b border-border flex items-center justify-between">
+          <div className="relative w-full max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input 
+              placeholder="Search by name or email..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9 bg-background border-border"
+            />
+          </div>
+          <div className="text-sm text-muted-foreground ml-4 shrink-0">
+            {filteredUsers.length} Users
           </div>
         </div>
-      </header>
 
-      <div className="max-w-7xl mx-auto px-4 py-8 relative z-10">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <Card className="glass-effect border-blue-200 dark:border-blue-800">
-            <CardContent className="p-6 text-center">
-              <Users className="h-8 w-8 text-blue-500 mx-auto mb-2" />
-              <h3 className="text-2xl font-bold text-gray-800 dark:text-gray-200">
-                {users.length}
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400">Total Users</p>
-            </CardContent>
-          </Card>
-
-          <Card className="glass-effect border-blue-200 dark:border-blue-800">
-            <CardContent className="p-6 text-center">
-              <User className="h-8 w-8 text-green-500 mx-auto mb-2" />
-              <h3 className="text-2xl font-bold text-gray-800 dark:text-gray-200">
-                {users.filter(u => u.status === 'active').length}
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400">Active Users</p>
-            </CardContent>
-          </Card>
-
-          <Card className="glass-effect border-blue-200 dark:border-blue-800">
-            <CardContent className="p-6 text-center">
-              <Shield className="h-8 w-8 text-purple-500 mx-auto mb-2" />
-              <h3 className="text-2xl font-bold text-gray-800 dark:text-gray-200">
-                {users.filter(u => u.isAdmin).length}
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400">Administrators</p>
-            </CardContent>
-          </Card>
-
-          <Card className="glass-effect border-blue-200 dark:border-blue-800">
-            <CardContent className="p-6 text-center">
-              <Mail className="h-8 w-8 text-orange-500 mx-auto mb-2" />
-              <h3 className="text-2xl font-bold text-gray-800 dark:text-gray-200">
-                {users.reduce((acc, u) => acc + u.totalListings, 0)}
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400">Total Listings</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Filters */}
-        <Card className="glass-effect border-blue-200 dark:border-blue-800 mb-8">
-          <CardContent className="p-6">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-                  <Input 
-                    placeholder="Search users..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 bg-white border-blue-200 focus:border-blue-400 dark:bg-gray-700 dark:border-blue-700"
-                  />
-                </div>
-              </div>
-              
-              <div className="flex gap-2">
-                {(['all', 'active', 'suspended', 'admin'] as const).map((status) => (
-                  <Button
-                    key={status}
-                    variant={filterStatus === status ? "default" : "outline"}
-                    onClick={() => setFilterStatus(status)}
-                    className={filterStatus === status ? 
-                      "bg-blue-500 hover:bg-blue-600" : 
-                      "border-blue-200 hover:bg-blue-50 dark:border-blue-700 dark:hover:bg-blue-900/20"
-                    }
-                  >
-                    {status.charAt(0).toUpperCase() + status.slice(1)}
-                  </Button>
-                ))}
-              </div>
+        <div className="overflow-x-auto">
+          {isLoading ? (
+            <div className="p-12 text-center text-muted-foreground flex flex-col items-center">
+              <Loader2 className="h-8 w-8 mb-4 animate-spin text-primary" />
+              Loading users...
             </div>
-          </CardContent>
-        </Card>
+          ) : filteredUsers.length === 0 ? (
+            <div className="p-12 text-center text-muted-foreground">
+              <UsersIcon className="h-10 w-10 mx-auto mb-3 opacity-20" />
+              No users found matching your search.
+            </div>
+          ) : (
+            <table className="w-full text-sm text-left">
+              <thead className="text-xs text-muted-foreground uppercase bg-muted/50 border-b border-border">
+                <tr>
+                  <th className="px-6 py-4 font-medium">User</th>
+                  <th className="px-6 py-4 font-medium">Role</th>
+                  <th className="px-6 py-4 font-medium">Status</th>
+                  <th className="px-6 py-4 font-medium">Points</th>
+                  <th className="px-6 py-4 font-medium">Joined</th>
+                  <th className="px-6 py-4 font-medium text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filteredUsers.map((user) => (
+                  <tr 
+                    key={user._id} 
+                    className="hover:bg-muted/30 transition-colors cursor-pointer"
+                    onClick={() => loadUserDetails(user._id)}
+                  >
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-9 w-9">
+                          <AvatarImage src={user.avatar} />
+                          <AvatarFallback className="bg-primary/10 text-primary">
+                            {user.name?.charAt(0) || 'U'}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <div className="font-medium text-foreground">{user.name}</div>
+                          <div className="text-xs text-muted-foreground">{user.email}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <Badge variant="outline" className={user.role === 'admin' ? 'border-primary text-primary' : ''}>
+                        {user.role}
+                      </Badge>
+                    </td>
+                    <td className="px-6 py-4">
+                      {user.status === 'suspended' ? (
+                        <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20">
+                          <Ban className="w-3 h-3 mr-1" /> Suspended
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20">
+                          <CheckCircle className="w-3 h-3 mr-1" /> Active
+                        </Badge>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 font-medium">
+                      {user.points || 0}
+                    </td>
+                    <td className="px-6 py-4 text-muted-foreground">
+                      {new Date(user.createdAt).toLocaleDateString()}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <Button variant="ghost" className="h-8 w-8 p-0">
+                            <span className="sr-only">Open menu</span>
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); loadUserDetails(user._id); }}>
+                            View Details
+                          </DropdownMenuItem>
+                          {user.role !== 'admin' && (
+                            user.status === 'suspended' ? (
+                              <DropdownMenuItem className="text-emerald-500" onClick={(e) => handleUnsuspend(user._id, e)}>
+                                Unsuspend User
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem className="text-destructive" onClick={(e) => handleSuspend(user._id, e)}>
+                                Suspend User
+                              </DropdownMenuItem>
+                            )
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </Card>
 
-        {/* Users Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredUsers.map((userData) => (
-            <Card key={userData.id} className="glass-effect border-blue-200 dark:border-blue-800 hover-lift">
-              <CardContent className="p-6">
-                <div className="flex items-center space-x-4 mb-4">
-                  <Avatar className="h-12 w-12">
-                    <AvatarImage src={userData.avatar || getDefaultAvatar()} alt={userData.name} />
-                    <AvatarFallback className="bg-white dark:bg-gray-700">
-                      {userData.name.charAt(0).toUpperCase()}
+      {/* User Details Slide-over */}
+      <Sheet open={!!selectedUserId} onOpenChange={(open) => !open && setSelectedUserId(null)}>
+        <SheetContent className="w-full sm:max-w-md border-border bg-card p-0 flex flex-col">
+          {isDetailLoading || !selectedUserDetails ? (
+            <div className="flex-1 flex items-center justify-center">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <>
+              <div className="p-6 border-b border-border bg-muted/20">
+                <SheetHeader className="mb-6 flex flex-row items-center justify-between">
+                  <SheetTitle>User Details</SheetTitle>
+                </SheetHeader>
+                
+                <div className="flex items-center gap-4 mb-6">
+                  <Avatar className="h-16 w-16 border-2 border-border">
+                    <AvatarImage src={selectedUserDetails.user.avatar} />
+                    <AvatarFallback className="text-xl bg-primary/10 text-primary">
+                      {selectedUserDetails.user.name?.charAt(0) || 'U'}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-gray-800 dark:text-gray-200">{userData.name}</h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">{userData.email}</p>
+                  <div>
+                    <h3 className="text-xl font-bold text-foreground flex items-center gap-2">
+                      {selectedUserDetails.user.name}
+                      {selectedUserDetails.user.status === 'suspended' && (
+                        <Badge className="bg-destructive hover:bg-destructive text-destructive-foreground">Suspended</Badge>
+                      )}
+                    </h3>
+                    <p className="text-sm text-muted-foreground flex items-center gap-1.5 mt-1">
+                      <Mail className="h-3.5 w-3.5" />
+                      {selectedUserDetails.user.email}
+                    </p>
+                    <p className="text-sm text-muted-foreground flex items-center gap-1.5 mt-1">
+                      <Calendar className="h-3.5 w-3.5" />
+                      Joined {new Date(selectedUserDetails.user.createdAt).toLocaleDateString()}
+                    </p>
                   </div>
-                  <div className="flex flex-col items-end space-y-2">
-                    <Badge className={getStatusColor(userData.status)}>
-                      {userData.status}
-                    </Badge>
-                    {userData.isAdmin && (
-                      <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
-                        Admin
-                      </Badge>
+                </div>
+
+                <div className="flex gap-2">
+                  {selectedUserDetails.user.role !== 'admin' && (
+                    selectedUserDetails.user.status === 'suspended' ? (
+                      <Button className="w-full bg-emerald-600 hover:bg-emerald-700" onClick={() => handleUnsuspend(selectedUserDetails.user._id)}>
+                        Unsuspend User
+                      </Button>
+                    ) : (
+                      <Button variant="destructive" className="w-full" onClick={() => handleSuspend(selectedUserDetails.user._id)}>
+                        <ShieldAlert className="h-4 w-4 mr-2" />
+                        Suspend User
+                      </Button>
+                    )
+                  )}
+                </div>
+              </div>
+
+              <ScrollArea className="flex-1 p-6">
+                <div className="space-y-6">
+                  {/* Stats Grid */}
+                  <div>
+                    <h4 className="text-sm font-semibold text-foreground mb-3 uppercase tracking-wider">Statistics</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Card className="bg-muted/30 border-border">
+                        <CardContent className="p-4">
+                          <div className="text-2xl font-bold text-primary">{selectedUserDetails.user.points || 0}</div>
+                          <div className="text-xs text-muted-foreground">Eco Points</div>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-muted/30 border-border">
+                        <CardContent className="p-4">
+                          <div className="text-2xl font-bold text-foreground">{selectedUserDetails.items.length}</div>
+                          <div className="text-xs text-muted-foreground">Total Listings</div>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-muted/30 border-border">
+                        <CardContent className="p-4">
+                          <div className="text-2xl font-bold text-foreground">{selectedUserDetails.purchases?.length || 0}</div>
+                          <div className="text-xs text-muted-foreground">Purchases</div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </div>
+
+                  {/* Listings */}
+                  <div>
+                    <h4 className="text-sm font-semibold text-foreground mb-3 uppercase tracking-wider flex items-center justify-between">
+                      Recent Listings
+                      <Badge variant="outline">{selectedUserDetails.items.length}</Badge>
+                    </h4>
+                    
+                    {selectedUserDetails.items.length === 0 ? (
+                      <div className="text-center py-6 border border-dashed border-border rounded-lg text-muted-foreground text-sm">
+                        No items listed yet
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {selectedUserDetails.items.slice(0, 5).map(item => (
+                          <div key={item._id} className="flex gap-3 p-3 rounded-lg border border-border bg-card">
+                            <div className="w-16 h-16 rounded bg-muted overflow-hidden shrink-0">
+                              <img src={item.images?.[0]} alt="" className="w-full h-full object-cover" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h5 className="font-medium text-sm truncate">{item.title}</h5>
+                              <div className="flex justify-between mt-1 text-xs text-muted-foreground">
+                                <span>{item.price} pts</span>
+                                <Badge variant="outline" className="text-[10px] h-4 px-1 py-0">{item.status}</Badge>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        {selectedUserDetails.items.length > 5 && (
+                          <Button variant="ghost" className="w-full text-sm" size="sm">
+                            View all {selectedUserDetails.items.length} listings
+                          </Button>
+                        )}
+                      </div>
                     )}
                   </div>
-                </div>
 
-                <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-                  <div className="flex items-center justify-between">
-                    <span>Joined:</span>
-                    <span>{new Date(userData.joinDate).toLocaleDateString()}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Total Listings:</span>
-                    <span className="font-medium">{userData.totalListings}</span>
-                  </div>
+                  {/* Purchases */}
+                  {selectedUserDetails.purchases && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-foreground mb-3 uppercase tracking-wider flex items-center justify-between">
+                        Purchase History
+                        <Badge variant="outline">{selectedUserDetails.purchases.length}</Badge>
+                      </h4>
+                      
+                      {selectedUserDetails.purchases.length === 0 ? (
+                        <div className="text-center py-6 border border-dashed border-border rounded-lg text-muted-foreground text-sm">
+                          No purchases yet
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {selectedUserDetails.purchases.slice(0, 5).map(purchase => (
+                            <div key={purchase._id} className="flex gap-3 p-3 rounded-lg border border-border bg-card">
+                              <div className="w-16 h-16 rounded bg-muted overflow-hidden shrink-0">
+                                <img src={purchase.item?.images?.[0]} alt="" className="w-full h-full object-cover" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h5 className="font-medium text-sm truncate">{purchase.item?.title || 'Unknown Item'}</h5>
+                                <div className="flex justify-between mt-1 text-xs text-muted-foreground">
+                                  <span className="text-destructive font-medium">-{purchase.points} pts</span>
+                                  <Badge variant="outline" className="text-[10px] h-4 px-1 py-0">{purchase.status}</Badge>
+                                </div>
+                                <div className="text-[10px] text-muted-foreground mt-1 truncate">
+                                  From: {purchase.seller?.name || 'Unknown User'}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                          {selectedUserDetails.purchases.length > 5 && (
+                            <Button variant="ghost" className="w-full text-sm" size="sm">
+                              View all {selectedUserDetails.purchases.length} purchases
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {filteredUsers.length === 0 && (
-          <Card className="glass-effect border-blue-200 dark:border-blue-800">
-            <CardContent className="p-12 text-center">
-              <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-800 dark:text-gray-200 mb-2">No users found</h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                Try different search terms or filters
-              </p>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+              </ScrollArea>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 };

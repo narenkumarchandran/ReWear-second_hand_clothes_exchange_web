@@ -1,14 +1,6 @@
 
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWishlist } from '@/contexts/WishlistContext';
@@ -19,56 +11,20 @@ import {
   Plus, 
   Menu,
   X,
-  Recycle,
   LogOut,
   Home,
-  Settings,
-  FileText,
-  Heart
+  Heart,
+  MessageSquare,
+  Package
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const { user, logout, isAuthenticated } = useAuth();
+  const { user, logout, isAuthenticated, isAdmin } = useAuth();
   const { wishlistItems } = useWishlist();
   const navigate = useNavigate();
   const location = useLocation();
-  
-  const getUserAvatar = () => {
-    const savedProfile = localStorage.getItem('userProfile');
-    if (savedProfile) {
-      const profile = JSON.parse(savedProfile);
-      return profile.avatar;
-    }
-    return 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=150&h=150&fit=crop&crop=face';
-  };
-
-  const getBreadcrumbs = () => {
-    const path = location.pathname;
-    const breadcrumbs = [
-      { label: 'Home', href: '/', icon: Home }
-    ];
-
-    if (path === '/browse') {
-      breadcrumbs.push({ label: 'Browse Items', href: '/browse', icon: ShoppingBag });
-    } else if (path === '/profile') {
-      breadcrumbs.push({ label: 'Profile', href: '/profile', icon: User });
-    } else if (path === '/list-item') {
-      breadcrumbs.push({ label: 'List Item', href: '/list-item', icon: Plus });
-    } else if (path === '/wishlist') {
-      breadcrumbs.push({ label: 'Wishlist', href: '/wishlist', icon: Heart });
-    } else if (path.startsWith('/item/')) {
-      breadcrumbs.push(
-        { label: 'Browse Items', href: '/browse', icon: ShoppingBag },
-        { label: 'Item Details', href: path, icon: FileText }
-      );
-    } else if (path === '/admin') {
-      breadcrumbs.push({ label: 'Admin Dashboard', href: '/admin', icon: Settings });
-    }
-
-    return breadcrumbs;
-  };
 
   const handleAuthAction = () => {
     if (isAuthenticated()) {
@@ -79,23 +35,56 @@ const Header = () => {
     }
   };
 
+  const navItems = [
+    { label: 'Home', icon: Home, path: '/', hideForAdmin: true },
+    { label: 'Browse', icon: ShoppingBag, path: '/browse' },
+    { label: 'Purchases', icon: ShoppingBag, path: '/purchases', authRequired: true, hideForAdmin: true },
+    { label: 'List Item', icon: Plus, path: '/list-item', authRequired: true, hideForAdmin: true },
+    { label: 'Messages', icon: MessageSquare, path: '/messages', authRequired: true },
+    { label: 'Admin', icon: Package, path: '/admin', adminOnly: true },
+  ];
+
+  const isActive = (path: string) => location.pathname === path;
+
   return (
-    <header className="sticky top-0 z-50 glass-effect border-b border-white/20 dark:border-gray-700/20">
-      <div className="max-w-7xl mx-auto px-4 py-4">
+    <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-xl">
+      <div className="max-w-7xl mx-auto px-4 py-3">
         <div className="flex items-center justify-between">
           {/* Logo */}
-          <Link to="/" className="flex items-center space-x-2 hover:opacity-80 transition-opacity">
-            <div className="bg-gradient-to-r from-green-500 to-emerald-500 p-2 rounded-full">
-              <Recycle className="h-6 w-6 text-white" />
+          <Link to="/" className="flex items-center space-x-2.5 hover:opacity-80 transition-opacity">
+            <div className="bg-primary p-1.5 rounded-lg">
+              <Package className="h-5 w-5 text-primary-foreground" />
             </div>
-            <span className="text-2xl font-bold gradient-text">ReWear</span>
+            <span className="text-xl font-bold text-foreground">ReWear</span>
           </Link>
 
-          {/* Spacer */}
-          <div className="flex-1"></div>
-
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-2">
+          <nav className="hidden md:flex items-center space-x-1">
+            {navItems.map((item) => {
+              if (item.authRequired && !isAuthenticated()) return null;
+              if (item.adminOnly && !isAdmin()) return null;
+              if (item.hideForAdmin && isAdmin()) return null;
+              return (
+                <Button 
+                  key={item.path}
+                  variant="ghost" 
+                  size="sm"
+                  className={`transition-all duration-200 ${
+                    isActive(item.path) 
+                      ? 'bg-primary/10 text-primary font-medium' 
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  }`}
+                  onClick={() => navigate(item.path)}
+                >
+                  <item.icon className="h-4 w-4 mr-1.5" />
+                  {item.label}
+                </Button>
+              );
+            })}
+          </nav>
+
+          {/* Right Side Actions */}
+          <div className="hidden md:flex items-center space-x-1.5">
             <ThemeToggle />
             
             {isAuthenticated() ? (
@@ -103,90 +92,50 @@ const Header = () => {
                 <Button 
                   variant="ghost" 
                   size="sm"
-                  className={`transition-all duration-300 ${
-                    location.pathname === '/' 
-                      ? 'bg-green-100 text-green-700 font-medium shadow-sm dark:bg-green-900/30' 
-                      : 'bg-transparent hover:bg-green-50 dark:hover:bg-green-900/20'
-                  }`}
-                  onClick={() => navigate('/')}
-                >
-                  <Home className="h-4 w-4 mr-2" />
-                  Home
-                </Button>
-                
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  className={`transition-all duration-300 ${
-                    location.pathname === '/list-item' 
-                      ? 'bg-green-100 text-green-700 font-medium shadow-sm dark:bg-green-900/30' 
-                      : 'bg-transparent hover:bg-green-50 dark:hover:bg-green-900/20'
-                  }`}
-                  onClick={() => navigate('/list-item')}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  List Item
-                </Button>
-                
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  className={`transition-all duration-300 ${
-                    location.pathname === '/browse' 
-                      ? 'bg-green-100 text-green-700 font-medium shadow-sm dark:bg-green-900/30' 
-                      : 'bg-transparent hover:bg-green-50 dark:hover:bg-green-900/20'
-                  }`}
-                  onClick={() => navigate('/browse')}
-                >
-                  <ShoppingBag className="h-5 w-5 mr-2" />
-                  Browse Items
-                </Button>
-
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  className={`relative transition-all duration-300 ${
-                    location.pathname === '/wishlist' 
-                      ? 'bg-green-100 text-green-700 font-medium shadow-sm dark:bg-green-900/30' 
-                      : 'bg-transparent hover:bg-green-50 dark:hover:bg-green-900/20'
+                  className={`relative transition-all duration-200 ${
+                    isActive('/wishlist') 
+                      ? 'bg-primary/10 text-primary' 
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                   }`}
                   onClick={() => navigate('/wishlist')}
                 >
-                  <Heart className="h-5 w-5 mr-2" />
-                  Wishlist
+                  <Heart className="h-4 w-4" />
                   {wishlistItems.length > 0 && (
-                    <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs bg-red-500 text-white">
+                    <Badge className="absolute -top-1 -right-1 h-4 w-4 flex items-center justify-center p-0 text-[10px] bg-destructive text-destructive-foreground">
                       {wishlistItems.length}
                     </Badge>
                   )}
                 </Button>
+
+                {/* Points Display */}
+                <div className="flex items-center px-2 py-1 mr-1 bg-primary/10 rounded-full border border-primary/20">
+                  <span className="text-xs font-bold text-primary flex items-center">
+                    <span className="mr-1">💰</span>
+                    {user?.points ?? 0} pts
+                  </span>
+                </div>
                 
                 <Button 
                   variant="ghost" 
                   size="sm"
-                  className={`transition-all duration-300 ${
-                    location.pathname === '/profile' 
-                      ? 'bg-green-100 text-green-700 font-medium shadow-sm dark:bg-green-900/30' 
-                      : 'bg-transparent hover:bg-green-50 dark:hover:bg-green-900/20'
+                  className={`transition-all duration-200 ${
+                    isActive('/profile') 
+                      ? 'bg-primary/10 text-primary' 
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                   }`}
                   onClick={() => navigate('/profile')}
                 >
-                  <img 
-                    src={getUserAvatar()} 
-                    alt="Profile" 
-                    className="h-5 w-5 rounded-full mr-2 object-cover"
-                  />
-                  Profile
+                  <User className="h-4 w-4 mr-1.5" />
+                  <span className="max-w-[80px] truncate">{user?.name?.split(' ')[0] || 'Profile'}</span>
                 </Button>
 
                 <Button 
                   variant="ghost" 
                   size="sm"
-                  className="bg-transparent hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600"
+                  className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                   onClick={handleAuthAction}
                 >
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Logout
+                  <LogOut className="h-4 w-4" />
                 </Button>
               </>
             ) : (
@@ -194,29 +143,16 @@ const Header = () => {
                 <Button 
                   variant="ghost" 
                   size="sm"
-                  className={`transition-all duration-300 ${
-                    location.pathname === '/' 
-                      ? 'bg-green-100 text-green-700 font-medium shadow-sm dark:bg-green-900/30' 
-                      : 'bg-transparent hover:bg-green-50 dark:hover:bg-green-900/20'
-                  }`}
-                  onClick={() => navigate('/')}
+                  onClick={() => navigate('/login')}
+                  className="text-muted-foreground hover:text-foreground"
                 >
-                  <Home className="h-4 w-4 mr-2" />
-                  Home
+                  Sign in
                 </Button>
                 <Button 
-                  variant="outline" 
                   size="sm"
-                  onClick={handleAuthAction}
+                  onClick={() => navigate('/login')}
                 >
-                  Login
-                </Button>
-                <Button 
-                  variant="pink"
-                  size="sm"
-                  onClick={handleAuthAction}
-                >
-                  Sign Up
+                  Get Started
                 </Button>
               </>
             )}
@@ -230,163 +166,80 @@ const Header = () => {
               size="sm"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
             >
-              {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+              {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </Button>
           </div>
         </div>
 
-        {/* Breadcrumb Navigation */}
-        {location.pathname !== '/' && (
-          <div className="mt-4 pt-4 border-t border-white/20 dark:border-gray-700/20">
-            <Breadcrumb>
-              <BreadcrumbList>
-                {getBreadcrumbs().map((crumb, index) => (
-                  <React.Fragment key={crumb.href}>
-                    <BreadcrumbItem>
-                      {index === getBreadcrumbs().length - 1 ? (
-                        <BreadcrumbPage className="flex items-center">
-                          {crumb.icon && <crumb.icon className="h-4 w-4 mr-1" />}
-                          {crumb.label}
-                        </BreadcrumbPage>
-                      ) : (
-                        <BreadcrumbLink asChild>
-                          <Link to={crumb.href} className="flex items-center hover:text-primary">
-                            {crumb.icon && <crumb.icon className="h-4 w-4 mr-1" />}
-                            {crumb.label}
-                          </Link>
-                        </BreadcrumbLink>
-                      )}
-                    </BreadcrumbItem>
-                    {index < getBreadcrumbs().length - 1 && <BreadcrumbSeparator />}
-                  </React.Fragment>
-                ))}
-              </BreadcrumbList>
-            </Breadcrumb>
-          </div>
-        )}
-
         {/* Mobile Menu */}
         {isMenuOpen && (
-          <div className="md:hidden mt-4 space-y-4 pb-4 border-t border-white/20 dark:border-gray-700/20 pt-4">
-            <div className="flex flex-col space-y-2">
-              {isAuthenticated() ? (
-                <>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className={`justify-start transition-all duration-300 ${
-                      location.pathname === '/' 
-                        ? 'bg-green-100 text-green-700 font-medium dark:bg-green-900/30' 
-                        : 'bg-transparent hover:bg-green-50 dark:hover:bg-green-900/20'
-                    }`}
-                    onClick={() => navigate('/')}
-                  >
-                    <Home className="h-4 w-4 mr-2" />
-                    Home
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className={`justify-start transition-all duration-300 ${
-                      location.pathname === '/list-item' 
-                        ? 'bg-green-100 text-green-700 font-medium dark:bg-green-900/30' 
-                        : 'bg-transparent hover:bg-green-50 dark:hover:bg-green-900/20'
-                    }`}
-                    onClick={() => navigate('/list-item')}
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    List Item
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className={`justify-start transition-all duration-300 ${
-                      location.pathname === '/browse' 
-                        ? 'bg-green-100 text-green-700 font-medium dark:bg-green-900/30' 
-                        : 'bg-transparent hover:bg-green-50 dark:hover:bg-green-900/20'
-                    }`}
-                    onClick={() => navigate('/browse')}
-                  >
-                    <ShoppingBag className="h-5 w-5 mr-2" />
-                    Browse Items
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className={`justify-start relative transition-all duration-300 ${
-                      location.pathname === '/wishlist' 
-                        ? 'bg-green-100 text-green-700 font-medium dark:bg-green-900/30' 
-                        : 'bg-transparent hover:bg-green-50 dark:hover:bg-green-900/20'
-                    }`}
-                    onClick={() => navigate('/wishlist')}
-                  >
-                    <Heart className="h-5 w-5 mr-2" />
-                    Wishlist
-                    {wishlistItems.length > 0 && (
-                      <Badge className="ml-2 h-5 w-5 flex items-center justify-center p-0 text-xs bg-red-500 text-white">
-                        {wishlistItems.length}
-                      </Badge>
-                    )}
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className={`justify-start transition-all duration-300 ${
-                      location.pathname === '/profile' 
-                        ? 'bg-green-100 text-green-700 font-medium dark:bg-green-900/30' 
-                        : 'bg-transparent hover:bg-green-50 dark:hover:bg-green-900/20'
-                    }`}
-                    onClick={() => navigate('/profile')}
-                  >
-                    <img 
-                      src={getUserAvatar()} 
-                      alt="Profile" 
-                      className="h-5 w-5 rounded-full mr-2 object-cover"
-                    />
-                    Profile
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={handleAuthAction}
-                    className="justify-start border-red-200 text-red-600 dark:border-red-800 dark:text-red-400"
-                  >
-                    <LogOut className="h-4 w-4 mr-2" />
-                    Logout
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className={`justify-start transition-all duration-300 ${
-                      location.pathname === '/' 
-                        ? 'bg-green-100 text-green-700 font-medium dark:bg-green-900/30' 
-                        : 'bg-transparent hover:bg-green-50 dark:hover:bg-green-900/20'
-                    }`}
-                    onClick={() => navigate('/')}
-                  >
-                    <Home className="h-4 w-4 mr-2" />
-                    Home
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={handleAuthAction}
-                  >
-                    Login
-                  </Button>
-                  <Button 
-                    variant="pink"
-                    size="sm"
-                    onClick={handleAuthAction}
-                  >
-                    Sign Up
-                  </Button>
-                </>
-              )}
-            </div>
+          <div className="md:hidden mt-3 space-y-1 pb-3 border-t border-border pt-3 animate-in">
+            {navItems.map((item) => {
+              if (item.authRequired && !isAuthenticated()) return null;
+              if (item.adminOnly && !isAdmin()) return null;
+              if (item.hideForAdmin && isAdmin()) return null;
+              return (
+                <Button 
+                  key={item.path}
+                  variant="ghost" 
+                  size="sm" 
+                  className={`w-full justify-start transition-all duration-200 ${
+                    isActive(item.path)
+                      ? 'bg-primary/10 text-primary font-medium' 
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  }`}
+                  onClick={() => { navigate(item.path); setIsMenuOpen(false); }}
+                >
+                  <item.icon className="h-4 w-4 mr-2" />
+                  {item.label}
+                </Button>
+              );
+            })}
+            
+            {isAuthenticated() ? (
+              <>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="w-full justify-start text-muted-foreground hover:text-foreground hover:bg-muted"
+                  onClick={() => { navigate('/wishlist'); setIsMenuOpen(false); }}
+                >
+                  <Heart className="h-4 w-4 mr-2" />
+                  Wishlist
+                  {wishlistItems.length > 0 && (
+                    <Badge className="ml-2 h-4 px-1.5 text-[10px] bg-destructive text-destructive-foreground">
+                      {wishlistItems.length}
+                    </Badge>
+                  )}
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="w-full justify-start text-muted-foreground hover:text-foreground hover:bg-muted"
+                  onClick={() => { navigate('/profile'); setIsMenuOpen(false); }}
+                >
+                  <User className="h-4 w-4 mr-2" />
+                  Profile
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => { handleAuthAction(); setIsMenuOpen(false); }}
+                  className="w-full justify-start text-destructive hover:bg-destructive/10"
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Logout
+                </Button>
+              </>
+            ) : (
+              <Button 
+                size="sm"
+                onClick={() => { navigate('/login'); setIsMenuOpen(false); }}
+                className="w-full"
+              >
+                Sign In
+              </Button>
+            )}
           </div>
         )}
       </div>

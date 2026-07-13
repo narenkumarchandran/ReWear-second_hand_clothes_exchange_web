@@ -1,5 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { authApi, setToken, clearToken, getToken, ApiUser } from '@/services/api';
 
 export type UserRole = 'admin' | 'user';
 
@@ -9,16 +10,22 @@ export interface User {
   name: string;
   role: UserRole;
   avatar?: string;
+  location?: string;
+  bio?: string;
+  phone?: string;
+  points?: number;
+  level?: string;
 }
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
-  login: (email: string, password: string, role: UserRole) => Promise<boolean>;
-  signup: (email: string, password: string, role: UserRole) => Promise<boolean>;
+  login: (email: string, password: string, role: UserRole) => Promise<{success: boolean, message?: string}>;
+  signup: (email: string, password: string, name: string) => Promise<{success: boolean, message?: string}>;
   logout: () => void;
   isAdmin: () => boolean;
   isAuthenticated: () => boolean;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -31,86 +38,99 @@ export const useAuth = () => {
   return context;
 };
 
+/**
+ * Convert an API user response to the frontend User shape.
+ */
+function toFrontendUser(apiUser: ApiUser): User {
+  return {
+    id: apiUser._id,
+    email: apiUser.email,
+    name: apiUser.name,
+    role: apiUser.role as UserRole,
+    avatar: apiUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${apiUser.email}`,
+    location: apiUser.location,
+    bio: apiUser.bio,
+    phone: apiUser.phone,
+    points: apiUser.points,
+    level: apiUser.level,
+  };
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // On mount, check for existing JWT and restore session
   useEffect(() => {
-    // Check for existing session in localStorage
-    const storedUser = localStorage.getItem('rewear_user');
-    if (storedUser) {
+    const restoreSession = async () => {
+      const token = getToken();
+      if (!token) {
+        setIsLoading(false);
+        return;
+      }
+
       try {
-        setUser(JSON.parse(storedUser));
+        const { user: apiUser } = await authApi.me();
+        const frontendUser = toFrontendUser(apiUser);
+        setUser(frontendUser);
+        localStorage.setItem('rewear_user', JSON.stringify(frontendUser));
       } catch (error) {
-        console.error('Failed to parse stored user:', error);
+        console.error('Session restoration failed:', error);
+        // Token is invalid or expired — clear it
+        clearToken();
         localStorage.removeItem('rewear_user');
       }
-    }
-    setIsLoading(false);
+
+      setIsLoading(false);
+    };
+
+    restoreSession();
   }, []);
 
-  const login = async (email: string, password: string, role: UserRole): Promise<boolean> => {
+  const refreshUser = async () => {
+    try {
+      const { user: apiUser } = await authApi.me();
+      const frontendUser = toFrontendUser(apiUser);
+      setUser(frontendUser);
+      localStorage.setItem('rewear_user', JSON.stringify(frontendUser));
+    } catch (error) {
+      console.error('Failed to refresh user:', error);
+    }
+  };
+
+  const login = async (email: string, password: string, role: UserRole): Promise<{success: boolean, message?: string}> => {
     setIsLoading(true);
     
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const response = await authApi.login(email, password, role);
       
-      // Mock validation - in real app, this would be API call
-      const isValidCredentials = password.length >= 6;
-      
-      if (isValidCredentials) {
-        const newUser: User = {
-          id: Math.random().toString(36).substr(2, 9),
-          email,
-          name: email.split('@')[0],
-          role,
-          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`
-        };
-        
-        setUser(newUser);
-        localStorage.setItem('rewear_user', JSON.stringify(newUser));
-        return true;
-      }
-      
-      return false;
-    } catch (error) {
+      setToken(response.token);
+      const frontendUser = toFrontendUser(response.user);
+      setUser(frontendUser);
+      localStorage.setItem('rewear_user', JSON.stringify(frontendUser));
+      return { success: true };
+    } catch (error: any) {
       console.error('Login error:', error);
-      return false;
+      return { success: false, message: error.message || 'Login failed' };
     } finally {
       setIsLoading(false);
     }
   };
 
-  const signup = async (email: string, password: string, role: UserRole): Promise<boolean> => {
+  const signup = async (email: string, password: string, name: string): Promise<{success: boolean, message?: string}> => {
     setIsLoading(true);
     
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const response = await authApi.signup(email, password, name);
       
-      // Mock validation - in real app, this would be API call
-      const isValidCredentials = password.length >= 6;
-      
-      if (isValidCredentials) {
-        // For signup, create user immediately and set them as logged in
-        const newUser: User = {
-          id: Math.random().toString(36).substr(2, 9),
-          email,
-          name: email.split('@')[0],
-          role,
-          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`
-        };
-        
-        setUser(newUser);
-        localStorage.setItem('rewear_user', JSON.stringify(newUser));
-        return true;
-      }
-      
-      return false;
-    } catch (error) {
+      setToken(response.token);
+      const frontendUser = toFrontendUser(response.user);
+      setUser(frontendUser);
+      localStorage.setItem('rewear_user', JSON.stringify(frontendUser));
+      return { success: true };
+    } catch (error: any) {
       console.error('Signup error:', error);
-      return false;
+      return { success: false, message: error.message || 'Signup failed' };
     } finally {
       setIsLoading(false);
     }
@@ -118,6 +138,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     setUser(null);
+    clearToken();
     localStorage.removeItem('rewear_user');
   };
 
@@ -132,7 +153,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       signup,
       logout,
       isAdmin,
-      isAuthenticated
+      isAuthenticated,
+      refreshUser
     }}>
       {children}
     </AuthContext.Provider>

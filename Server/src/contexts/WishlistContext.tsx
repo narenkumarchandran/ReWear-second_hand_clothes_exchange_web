@@ -1,5 +1,7 @@
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { wishlistApi, WishlistItemResponse } from '@/services/api';
+import { getToken } from '@/services/api';
 
 interface WishlistItem {
   id: string;
@@ -32,28 +34,63 @@ export const useWishlist = () => {
 export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [wishlistItems, setWishlistItems] = useState<WishlistItem[]>([]);
 
-  useEffect(() => {
-    const savedWishlist = localStorage.getItem('rewear_wishlist');
-    if (savedWishlist) {
-      setWishlistItems(JSON.parse(savedWishlist));
+  // Load wishlist from API on mount (if logged in)
+  const loadWishlist = useCallback(async () => {
+    const token = getToken();
+    if (!token) {
+      setWishlistItems([]);
+      return;
+    }
+
+    try {
+      const { items } = await wishlistApi.get();
+      setWishlistItems(items);
+    } catch (error) {
+      console.error('Failed to load wishlist:', error);
+      // Fall back to localStorage if API fails
+      try {
+        const saved = localStorage.getItem('rewear_wishlist');
+        if (saved) setWishlistItems(JSON.parse(saved));
+      } catch { /* ignore */ }
     }
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('rewear_wishlist', JSON.stringify(wishlistItems));
-  }, [wishlistItems]);
+    loadWishlist();
+  }, [loadWishlist]);
 
-  const addToWishlist = (item: WishlistItem) => {
+  const addToWishlist = async (item: WishlistItem) => {
+    // Optimistic update
     setWishlistItems(prev => {
       if (prev.some(existingItem => existingItem.id === item.id)) {
         return prev;
       }
       return [...prev, { ...item, addedDate: new Date().toISOString() }];
     });
+
+    try {
+      await wishlistApi.add(item.id);
+    } catch (error) {
+      console.error('Failed to add to wishlist:', error);
+      // Rollback on failure
+      setWishlistItems(prev => prev.filter(i => i.id !== item.id));
+    }
   };
 
-  const removeFromWishlist = (itemId: string) => {
+  const removeFromWishlist = async (itemId: string) => {
+    // Save for rollback
+    const previousItems = wishlistItems;
+
+    // Optimistic update
     setWishlistItems(prev => prev.filter(item => item.id !== itemId));
+
+    try {
+      await wishlistApi.remove(itemId);
+    } catch (error) {
+      console.error('Failed to remove from wishlist:', error);
+      // Rollback on failure
+      setWishlistItems(previousItems);
+    }
   };
 
   const isInWishlist = (itemId: string) => {

@@ -53,13 +53,6 @@ export default {
 					DEFAULT: 'hsl(var(--card))',
 					foreground: 'hsl(var(--card-foreground))'
 				},
-				'forest-green': 'hsl(var(--forest-green))',
-				'mint-green': 'hsl(var(--mint-green))',
-				'off-white': 'hsl(var(--off-white))',
-				'charcoal': 'hsl(var(--charcoal))',
-				'olive': 'hsl(var(--olive))',
-				'coral': 'hsl(var(--coral))',
-				'incoming': 'hsl(var(--incoming))',
 			},
 			borderRadius: {
 				lg: 'var(--radius)',
@@ -75,19 +68,13 @@ export default {
 					from: { height: 'var(--radix-accordion-content-height)' },
 					to: { height: '0' }
 				},
-				floating: {
-					'0%, 100%': { transform: 'translateY(0px)' },
-					'50%': { transform: 'translateY(-10px)' }
-				}
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
 				'accordion-up': 'accordion-up 0.2s ease-out',
-				floating: 'floating 3s ease-in-out infinite'
 			},
 			fontFamily: {
-				sans: ['Inter', 'sans-serif'],
-				serif: ['Playfair Display', 'serif'],
+				sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
 			}
 		}
 	},

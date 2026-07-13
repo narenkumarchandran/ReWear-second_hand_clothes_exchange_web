@@ -1,99 +1,77 @@
+/**
+ * Gemini Chatbot Service
+ * Provides multi-turn chat for the ReWear platform.
+ */
 
-class GeminiService {
-  private apiKey = 'AIzaSyApSEbbZdNCPhH03DasQGkxpwd1A7NrZDY';
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
-  private getSystemPrompt(): string {
-    return `You are Bob, a friendly and knowledgeable marketplace assistant for ReWear, a community exchange website where users buy and sell used clothes. Your personality is helpful, enthusiastic, and professional.
+export interface ChatMessage {
+  role: 'user' | 'model';
+  content: string;
+}
 
-IMPORTANT GUIDELINES:
-- Always stay in character as Bob, the marketplace assistant
-- Focus exclusively on topics related to buying/selling used clothes, marketplace operations, and customer service
-- Be concise but thorough in your responses
-- Use emojis sparingly but effectively
-- Provide actionable advice and specific tips
-- If asked about topics unrelated to the marketplace, politely redirect back to marketplace topics
+const SYSTEM_INSTRUCTION = `
+You are the ReWear Assistant, an AI helper for a sustainable second-hand clothing exchange platform.
+You should be helpful, concise, and friendly. You know about:
+- Uploading items (AI auto-generates descriptions and predicts sizes)
+- Eco-points system (used for buying instead of cash)
+- Direct swaps (trading item for item)
+- Sustainability (saving water and CO2 by buying second-hand)
+Keep responses under 3 paragraphs. Use formatting (bold, bullet points) to be readable.
+`;
 
-KNOWLEDGE AREAS YOU EXCEL IN:
-- How to sell clothes effectively (photos, descriptions, pricing)
-- Buying tips and safety guidelines
-- Shipping and packaging advice
-- Return policies and dispute resolution
-- What items sell best and market trends
-- Safety and fraud prevention
-- Platform features and policies
-- Pricing strategies for used clothing
-- Seasonal trends and demand patterns
-- Quality assessment and condition descriptions
+export const geminiService = {
+  /**
+   * Send a multi-turn message to Gemini 1.5 Flash
+   */
+  async sendMessage(history: ChatMessage[], newMessage: string): Promise<string> {
+    if (!GEMINI_API_KEY) {
+      console.warn('VITE_GEMINI_API_KEY is not set. Chatbot is in fallback mode.');
+      return "Hi there! I'm currently in offline demo mode because my API key isn't configured. I'm the ReWear Assistant, here to help you navigate our sustainable fashion exchange. How can I help you today?";
+    }
 
-TONE: Friendly, helpful, professional, and encouraging. Always aim to solve problems and provide value.
-
-Remember: You're here to help users succeed in buying and selling used clothes on ReWear!`;
-  }
-
-  async getBotResponse(userMessage: string, conversationHistory: Array<{role: string, content: string}> = []): Promise<string> {
     try {
-      const prompt = this.formatPromptForGemini([
-        { role: 'system', content: this.getSystemPrompt() },
-        ...conversationHistory,
-        { role: 'user', content: userMessage }
-      ]);
-      
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${this.apiKey}`, {
+      // Format history for Gemini API
+      // Note: Gemini API requires strict 'user' and 'model' roles.
+      const formattedHistory = history.map(msg => ({
+        role: msg.role === 'user' ? 'user' : 'model',
+        parts: [{ text: msg.content }]
+      }));
+
+      // Add the new message
+      formattedHistory.push({
+        role: 'user',
+        parts: [{ text: newMessage }]
+      });
+
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
-          contents: [{
-            parts: [{ text: prompt }]
-          }]
+          system_instruction: {
+            parts: [{ text: SYSTEM_INSTRUCTION }]
+          },
+          contents: formattedHistory,
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 500,
+          }
         })
       });
 
-      const result = await response.json();
-      const text = result.candidates?.[0]?.content?.parts?.[0]?.text || this.getFallbackResponse();
-      return text.trim();
-    } catch (error) {
-      console.error('Gemini API Error:', error);
-      return this.getFallbackResponse();
-    }
-  }
-
-  private formatPromptForGemini(messages: Array<{role: string, content: string}>): string {
-    let prompt = '';
-    
-    for (const message of messages) {
-      if (message.role === 'system') {
-        prompt += `SYSTEM INSTRUCTIONS: ${message.content}\n\n`;
-      } else if (message.role === 'user') {
-        prompt += `USER: ${message.content}\n`;
-      } else if (message.role === 'assistant') {
-        prompt += `BOB: ${message.content}\n`;
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Gemini API Error:', errorData);
+        throw new Error('Failed to get response from AI');
       }
+
+      const data = await response.json();
+      return data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not generate a response.';
+    } catch (error) {
+      console.error('Chatbot error:', error);
+      return "I'm having trouble connecting right now. Please try again later!";
     }
-    
-    prompt += 'BOB: ';
-    return prompt;
   }
-
-  private getFallbackResponse(): string {
-    const fallbacks = [
-      "I'm having a bit of trouble connecting right now, but I'm here to help with your marketplace questions! Could you try asking again?",
-      "Sorry, I'm experiencing some technical difficulties. I'm Bob, your marketplace assistant - what can I help you with regarding buying or selling clothes?",
-      "Oops! Something went wrong on my end. I'm here to help with anything related to our used clothing marketplace. What would you like to know?",
-    ];
-    
-    return fallbacks[Math.floor(Math.random() * fallbacks.length)];
-  }
-
-  getQuickSuggestions(): string[] {
-    return [
-      'How to sell clothes?',
-      'What sells best?',
-      'Shipping information',
-      'Return policy',
-      'Pricing guide',
-      'Safety tips'
-    ];
-  }
-}
-
-export const geminiService = new GeminiService();
+};
