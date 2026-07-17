@@ -22,6 +22,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import Header from '@/components/Header';
 import { aiDescriptionService } from '@/services/aiDescriptionService';
+import { nsfwService } from '@/services/nsfwService';
 import { itemsApi } from '@/services/api';
 
 const ListItem = () => {
@@ -53,7 +54,7 @@ const ListItem = () => {
     setImageVerificationStatus(prev => ({ ...prev, [index]: 'pending' }));
     
     try {
-      const moderationResult = await aiDescriptionService.moderateImage(file);
+      const moderationResult = await nsfwService.moderateImage(file);
       
       if (moderationResult.isAppropriate) {
         setImageVerificationStatus(prev => ({ ...prev, [index]: 'verified' }));
@@ -104,7 +105,7 @@ const ListItem = () => {
     setIsGenerating(true);
     
     try {
-      const moderationResult = await aiDescriptionService.moderateImage(images[0]);
+      const moderationResult = await nsfwService.moderateImage(images[0]);
       
       if (!moderationResult.isAppropriate) {
         toast.error(moderationResult.message);

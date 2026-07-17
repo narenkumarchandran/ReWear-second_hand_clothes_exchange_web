@@ -3,7 +3,6 @@
  */
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-const DEEPAI_API_KEY = import.meta.env.VITE_DEEPAI_API_KEY;
 
 export interface GeneratedDescription {
   title: string;
@@ -25,12 +24,6 @@ export interface GeneratedDescription {
 export interface SizePrediction {
   predictedSize: string;
   confidence: string;
-}
-
-export interface ModerationResult {
-  isAppropriate: boolean;
-  nsfwScore: number;
-  message?: string;
 }
 
 export const aiDescriptionService = {
@@ -65,7 +58,7 @@ export const aiDescriptionService = {
         }
       `;
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${GEMINI_API_KEY}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -76,7 +69,7 @@ export const aiDescriptionService = {
               { text: prompt },
               {
                 inline_data: {
-                  mime_type: imageFile.type,
+                  mime_type: imageFile.type || 'image/jpeg',
                   data: base64Data
                 }
               }
@@ -127,14 +120,14 @@ export const aiDescriptionService = {
 
       const prompt = `Analyze this clothing item and estimate its size (e.g., XS, S, M, L, XL, XXL, or numeric like 32, 8). Return ONLY a JSON object: {"predictedSize": "M", "confidence": "Medium"}`;
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${GEMINI_API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{
             parts: [
               { text: prompt },
-              { inline_data: { mime_type: imageFile.type, data: base64Data } }
+              { inline_data: { mime_type: imageFile.type || 'image/jpeg', data: base64Data } }
             ]
           }]
         })
@@ -147,50 +140,6 @@ export const aiDescriptionService = {
     } catch (error) {
       console.error('Size prediction error:', error);
       return { predictedSize: 'M', confidence: 'Unknown' };
-    }
-  },
-
-  /**
-   * Moderate image using DeepAI NSFW detector
-   */
-  async moderateImage(imageFile: File): Promise<ModerationResult> {
-    if (!DEEPAI_API_KEY) {
-      console.warn('VITE_DEEPAI_API_KEY is not set. Bypassing DeepAI moderation.');
-      return { isAppropriate: true, nsfwScore: 0 };
-    }
-
-    try {
-      const formData = new FormData();
-      formData.append('image', imageFile);
-
-      const response = await fetch('https://api.deepai.org/api/nsfw-detector', {
-        method: 'POST',
-        headers: {
-          'api-key': DEEPAI_API_KEY
-        },
-        body: formData
-      });
-
-      if (!response.ok) {
-        throw new Error('DeepAI API error');
-      }
-
-      const data = await response.json();
-      const nsfwScore = data.output.nsfw_score;
-
-      // Score > 0.6 is considered NSFW generally
-      const isAppropriate = nsfwScore < 0.6;
-
-      return {
-        isAppropriate,
-        nsfwScore,
-        message: isAppropriate 
-          ? `Image approved`
-          : 'Image was flagged as inappropriate. Please upload a different image.'
-      };
-    } catch (error) {
-      console.error('Image moderation error:', error);
-      return { isAppropriate: true, nsfwScore: 0, message: 'Moderation unavailable — proceeding' };
     }
   },
 
