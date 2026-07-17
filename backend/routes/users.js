@@ -126,6 +126,34 @@ router.get('/:id', auth, admin, async (req, res) => {
 });
 
 /**
+ * PUT /api/users/:id/points
+ * Admin: update a user's points.
+ * Requires auth + admin.
+ */
+router.put('/:id/points', auth, admin, async (req, res) => {
+  try {
+    const { points } = req.body;
+    
+    if (typeof points !== 'number') {
+      return res.status(400).json({ message: 'Points must be a number.' });
+    }
+
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    user.points = points;
+    await user.save();
+
+    res.json({ message: 'User points updated.', user: user.toJSON() });
+  } catch (error) {
+    console.error('Update points error:', error);
+    res.status(500).json({ message: 'Server error updating points.' });
+  }
+});
+
+/**
  * PUT /api/users/:id/suspend
  * Admin: suspend a user.
  * Requires auth + admin.

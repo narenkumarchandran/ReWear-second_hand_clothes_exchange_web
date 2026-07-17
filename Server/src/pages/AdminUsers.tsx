@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { usersApi, ApiUser, ApiItem } from '@/services/api';
+import { usersApi, conversationsApi, ApiUser, ApiItem } from '@/services/api';
 import { 
   Users as UsersIcon,
   Search,
@@ -14,8 +14,12 @@ import {
   Calendar,
   X,
   Package,
-  Loader2
+  Loader2,
+  Edit2,
+  MessageSquare
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'sonner';
@@ -27,6 +31,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 const AdminUsers = () => {
   const [users, setUsers] = useState<ApiUser[]>([]);
@@ -38,6 +49,11 @@ const AdminUsers = () => {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedUserDetails, setSelectedUserDetails] = useState<{user: ApiUser, items: ApiItem[], purchases?: any[]} | null>(null);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
+
+  const [isEditPointsOpen, setIsEditPointsOpen] = useState(false);
+  const [editPointsValue, setEditPointsValue] = useState<number | string>('');
+  const [isMessaging, setIsMessaging] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     loadUsers();
@@ -101,6 +117,45 @@ const AdminUsers = () => {
       if (selectedUserId === id) loadUserDetails(id);
     } catch (error: any) {
       toast.error(error.message || 'Failed to unsuspend user');
+    }
+  };
+
+  const handleOpenEditPoints = () => {
+    if (selectedUserDetails) {
+      setEditPointsValue(selectedUserDetails.user.points || 0);
+      setIsEditPointsOpen(true);
+    }
+  };
+
+  const handleSavePoints = async () => {
+    if (!selectedUserId || editPointsValue === '') return;
+    const points = parseInt(editPointsValue as string, 10);
+    if (isNaN(points)) {
+      toast.error('Points must be a valid number');
+      return;
+    }
+
+    try {
+      await usersApi.updatePoints(selectedUserId, points);
+      toast.success('Points updated successfully');
+      setIsEditPointsOpen(false);
+      loadUserDetails(selectedUserId);
+      loadUsers();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update points');
+    }
+  };
+
+  const handleMessageUser = async () => {
+    if (!selectedUserId) return;
+    setIsMessaging(true);
+    try {
+      const { conversation } = await conversationsApi.create(selectedUserId, undefined, 'user-admin');
+      navigate(`/messages/${conversation._id}`);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to start conversation');
+    } finally {
+      setIsMessaging(false);
     }
   };
 
@@ -281,6 +336,10 @@ const AdminUsers = () => {
                       </Button>
                     )
                   )}
+                  <Button variant="outline" className="w-full" onClick={handleMessageUser} disabled={isMessaging}>
+                    {isMessaging ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <MessageSquare className="h-4 w-4 mr-2" />}
+                    Message User
+                  </Button>
                 </div>
               </div>
 
@@ -290,9 +349,14 @@ const AdminUsers = () => {
                   <div>
                     <h4 className="text-sm font-semibold text-foreground mb-3 uppercase tracking-wider">Statistics</h4>
                     <div className="grid grid-cols-2 gap-3">
-                      <Card className="bg-muted/30 border-border">
+                      <Card className="bg-muted/30 border-border group relative">
                         <CardContent className="p-4">
-                          <div className="text-2xl font-bold text-primary">{selectedUserDetails.user.points || 0}</div>
+                          <div className="text-2xl font-bold text-primary flex items-center gap-2">
+                            {selectedUserDetails.user.points || 0}
+                            <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity" onClick={handleOpenEditPoints}>
+                              <Edit2 className="h-3 w-3" />
+                            </Button>
+                          </div>
                           <div className="text-xs text-muted-foreground">Eco Points</div>
                         </CardContent>
                       </Card>
@@ -393,6 +457,30 @@ const AdminUsers = () => {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Edit Points Dialog */}
+      <Dialog open={isEditPointsOpen} onOpenChange={setIsEditPointsOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Edit User Points</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="points">Eco Points</Label>
+              <Input
+                id="points"
+                type="number"
+                value={editPointsValue}
+                onChange={(e) => setEditPointsValue(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditPointsOpen(false)}>Cancel</Button>
+            <Button onClick={handleSavePoints}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

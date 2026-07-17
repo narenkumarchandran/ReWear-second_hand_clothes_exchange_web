@@ -245,6 +245,12 @@ export const usersApi = {
       body: JSON.stringify(data),
     }),
 
+  updatePoints: (id: string, points: number) =>
+    request<{ message: string; user: ApiUser }>(`/api/users/${id}/points`, {
+      method: 'PUT',
+      body: JSON.stringify({ points }),
+    }),
+
   listAll: () =>
     request<{ users: ApiUser[] }>('/api/users'),
 
