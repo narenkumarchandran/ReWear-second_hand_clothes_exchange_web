@@ -15,21 +15,18 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // ── Middleware ──────────────────────────────────────────────
-const ALLOWED_ORIGINS = [
-  'http://localhost:8080',
-  'http://127.0.0.1:8080',
-  process.env.ALLOWED_ORIGIN, // Set this to your Vercel frontend URL in production
-].filter(Boolean);
 
-app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (e.g. mobile apps, curl, Postman)
-    if (!origin) return callback(null, true);
-    if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
-    callback(new Error(`CORS: Origin ${origin} not allowed`));
-  },
-  credentials: true,
-}));
+// Enable CORS for all origins
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+  next();
+});
+
 
 // Increase JSON body limit to handle base64 images (up to 50MB)
 app.use(express.json({ limit: '50mb' }));
