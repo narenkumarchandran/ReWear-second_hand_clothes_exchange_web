@@ -15,9 +15,18 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // ── Middleware ──────────────────────────────────────────────
+const ALLOWED_ORIGINS = [
+  'http://localhost:8080',
+  'http://127.0.0.1:8080',
+  process.env.ALLOWED_ORIGIN, // Set this to your Vercel frontend URL in production
+].filter(Boolean);
+
 app.use(cors({
   origin: function (origin, callback) {
-    callback(null, true);
+    // Allow requests with no origin (e.g. mobile apps, curl, Postman)
+    if (!origin) return callback(null, true);
+    if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS: Origin ${origin} not allowed`));
   },
   credentials: true,
 }));
